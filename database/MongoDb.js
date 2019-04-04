@@ -24,15 +24,24 @@ class MongoDB{
 
 	async addUser(_id, name) {
 		const users = this.db.collection('users')
+		const location = {
+			type: 'Point',
+			coordinates: [
+				30.34223048,
+				59.93624285
+			]
+		}
+		const updated = new Date()
 
-		const user_exist = await users.findOne({ _id })
-		if ( !user_exist ) {
-			let updated = new Date()
-			await users.insertOne({_id, name, updated})
-		}   
+		try {
+			await users.insertOne({ _id, name, location, updated })
+		} catch (err) {
+			await users.updateOne({ _id }, { $set: { name, location, updated } } )
+		}
+		
 	}
 
-	async userData(id, params={}) {
+	async userData(_id, params={}) {
 		const users = this.db.collection('users')
 
 		if (Object.keys(params).length) {
@@ -48,23 +57,22 @@ class MongoDB{
 				params.updated = new Date()
 			}
 
-			await users.updateOne({ _id: id }, { $set: params })
+			await users.updateOne({ _id }, { $set: params })
 		}
 
 		const doc = await users.findOne(
-			{ _id: id }, 
+			{ _id }, 
 			{ projection: { _id: 0, status: 1, location: 1 } }
 		)
 		return doc
 	}
 
-
 	async getMovieData(input) {
 		const movies = this.db.collection('movies')
 		let movie_schema
 
-		if (typeof(input) === 'number') {
-			movie_schema = await movies.findOne({ _id: input })
+		if ( Number(input) ) {
+			movie_schema = await movies.findOne({ _id: Number(input) })
 		} else {
 			input = '"' + input.split(' ').join('" "') + '"'
 			movie_schema = await movies.findOne({ 
@@ -73,20 +81,6 @@ class MongoDB{
 		}
 
 		return movie_schema
-	}
-
-	async moviesList() {
-	 	const movies = this.db.collection('movies')
-
-	 	const most_popular = await movies.find({})
-	 		.sort({'showcounts': -1}).limit(12)
-	 		.project({ name: 1, rating: 1 }).toArray()
-
-	 	const high_ranking = await movies.find({})
-	 		.sort({'rating.kp': -1}).limit(12)
-	 		.project({ name: 1, rating: 1 }).toArray()
-
-	 	return [most_popular, high_ranking]
 	}
 
 	async getCinemaData(input) {
@@ -141,7 +135,7 @@ class MongoDB{
 				$geoNear: {
 				  	near: { type: "Point", coordinates: user_coord },
 				  	spherical: true,
-				  	limit: 5,
+				  	limit: 12,
  					maxDistance: 25000,
 				  	query: { 
 						$or: [
@@ -178,19 +172,75 @@ class MongoDB{
 			}
 		]).toArray()
 
+		matched_cinemas.forEach((cinema) => {
+			cinema.distance = Math.round(cinema.distance / 10) / 100
+			cinema.schedule.sort((a, b) => {
+				if (a.time <= '03:00' && b.time >= '03:00') return true
+				else if (b.time <= '03:00' && a.time > '03:00') return false
+				else if (a.time > b.time) return true
+				else return false
+			})
+		})
+
 		return matched_cinemas
 	}
+
+	async moviesList(id) {
+	 	const movies = this.db.collection('movies')
+
+	 	let most_popular = await movies.find({})
+	 		.sort({'showcounts': -1}).limit(40)
+	 		.project({ name: 1, rating: 1, genres: 1 }).toArray()
+
+	 	let high_ranking = await movies.find({})
+	 		.sort({'rating.kp': -1}).limit(40)
+	 		.project({ name: 1, rating: 1, genres: 1 }).toArray()
+
+
+	 	const cinemas = this.db.collection('cinemas')
+	 	const { location } = await this.userData(id)
+	 	const time = (new Date).toTimeString().slice(0, 5)
+
+	 	async function goes_near(movie) {
+	 		const name = movie.name.replace(/\./g, '[dot]')
+
+	 		let cinemas_with_movie = await cinemas.aggregate([
+	 			{
+	 				$geoNear: {
+	 					near: location,
+	 					spherical: true,
+	 					limit: 1,
+	 					maxDistance: 25000,
+ 					  	query: { 
+ 							$or: [
+ 								{ [`schedule.${name}.time`]: { $gte: time } }, 
+ 								{ [`schedule.${name}.time`]: { $lte: '03:00' } }
+ 							]
+ 					  	},
+ 					  	distanceField: 'distance'
+	 				}
+	 			}
+	 		]).toArray()
+
+	 		return cinemas_with_movie.length ? true : false
+	 	}
+
+		most_popular = ( await most_popular.filter(goes_near) ).slice(0, 18)
+		high_ranking = ( await high_ranking.filter(goes_near) ).slice(0, 18)
+
+	 	return [most_popular, high_ranking]
+	}	
 
 	async cinemasNearby(id) {
 		let { location: user_loc } = await this.userData(id)
 		const cinemas = this.db.collection('cinemas')
 
-		const nearest = cinemas.aggregate([
+		const nearest = await cinemas.aggregate([
 			{
 				$geoNear: {
 				  	near: user_loc,
 				  	spherical: true,
-				  	limit: 6,
+				  	limit: 24,
  					maxDistance: 25000,
 				  	distanceField: 'distance'
 				}
@@ -205,7 +255,33 @@ class MongoDB{
 			}
 		]).toArray()
 
+		nearest.forEach((cinema) => {
+			cinema.distance = ( Math.round(cinema.distance / 10) ) / 100
+		})
+
 		return nearest
+	}
+
+	async saveInline(keyboards) {
+		const inline = this.db.collection('inline')
+		const pages_line = keyboards[0][0][0].text === '·1·' ? 0 : 1
+
+		const keyboards_obj = keyboards.map((keyboard, i) => {
+			const _id = keyboard[pages_line][i]
+				.callback_data
+				.match(/\[.+\]/)[0]
+				.slice(1, -1)
+
+			return { _id, keyboard }
+		})
+
+		await inline.insertMany(keyboards_obj)
+	}
+
+	async getInline(_id) {
+		const inline = this.db.collection('inline')
+		const doc = await inline.findOne({ _id })
+		return doc
 	}
 
 }

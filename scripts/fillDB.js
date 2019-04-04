@@ -1,7 +1,8 @@
+require('dotenv').config() 
 const axios = require('axios');
 const cheerio = require('cheerio');
 const MongoClient = require('mongodb').MongoClient;
-// const status = require('node-status')
+
 
 let Errors = {
 	date: new Date(),
@@ -17,86 +18,16 @@ let Errors = {
 	}
 }
 
-class Loader {
-	static async getCinemas() {
-    	let $
+const Parser = {
+	array_from(block, $) {
+		const array = block
+			.map( (i, elem) => $(elem).text().trim() )
+			.get()
 
-    	const { data: spb_cinemas_page } = await axios
-    		.get('https://spb.kinoafisha.info/cinema/')
-    		.catch((err) => axios.get('https://spb.kinoafisha.info/cinema/'))
+		return (array.length) ? array : null
+	},
 
-    	$ = cheerio.load(spb_cinemas_page)
-    	const spb_hrefs = $('.theater_name')
-        	.map((i, elem) => $(elem).attr('href'))
-        	.get()
-
-    	// const { data: msk_cinemas_page } = await axios
-    	// 	.get('https://msk.kinoafisha.info/cinema/')
-    	// 	.catch((err) => axios.get('https://msk.kinoafisha.info/cinema/'))
-
-     //    $ = cheerio.load(msk_cinemas_page)
-    	// const msk_hrefs = $('.theater_name')
-     //    	.map((i, elem) => $(elem).attr('href'))
-     //    	.get()
-
-     //    return [...msk_hrefs, ...spb_hrefs]
-     	return spb_hrefs
-	}
-
-
-	static async getMovieRatings() {
-		const kp_url = 'https://www.kinopoisk.ru/api/afisha/films/?limit=15'
-		const headers = { 'X-Requested-With': 'XMLHttpRequest' }
-
-		const documents_total = (await axios.get(kp_url, { headers }))
-			.data
-			.pagination
-			.total
-
-
-
-		let movie_objects = []
-		let batch_number = 0
-		let batch_url, items
-
-		do {
-		  batch_url = kp_url + `&offset=${batch_number * 15}`
-		  items = (await axios.get(batch_url, { headers })).data.items
-
-		  movie_objects.push(...items)
-		  batch_number++
-		} while (items.length)
-
-
-		Errors.add('Кинопоиск отдал не все файлы', 
-			`${documents_total} - найдено. ${movie_objects.length} - получено.`)
-
-
-		let ratings = {}
-	  	for (let movie of movie_objects) {
-	  		if (movie.title) {
-	  			ratings[movie.title] = {
-	  				link: `https://rating.kinopoisk.ru/${movie.id}.xml`,
-	  				kp_rating: Number(movie.ratings.kp.value)
-	  			}
-	  		}
-	  	}
-	  	return ratings
-	}
-}
-
-
-class Parser {
-	static str_to_array(str) {
-	    let formated = str
-			.replace(/([а-я])([А-Я])/g, '$1, $2')
-			.replace(/(США)([А-Я])/g, '$1, $2')
-	    let arr =  formated.split(', ')
-
-	    return arr
-	}
-
-	static parse_and_form_schedule(item) {
+	parse_and_form_schedule(item) {
 	    let $ = cheerio.load(item)
 	    const seances = item.children()
 	    let movie_schedule = []
@@ -123,232 +54,330 @@ class Parser {
 	    })
 
 	    return movie_schedule
+	},
+
+	getLinks(data) {
+		const $ = cheerio.load(data)
+		const links = $('.theater_name')
+			.map((i, elem) => $(elem).attr('href'))
+			.get()
+
+		return links
+	},
+
+	makeCinemaSchema(data) {
+		let $ = cheerio.load(data)
+
+	    const name = $('.grid').find('h1').text()
+	    const metros = this.array_from($('.metro'), $)
+	    const address = $('span[itemprop="address"]').text().trim()
+	    const telephone = $('.theaterInfo_phone').text()
+
+	    const coords = [ $('meta[itemprop="longitude"]').attr('content'), 
+	    				 $('meta[itemprop="latitude"]').attr('content') ]
+	    const location = { type: 'Point', 
+	    				   coordinates: coords.map(coord => +coord ) }
+
+	    let schedule = {}, movie_links = []
+	    const movie_items = $('.showtimes_item.fav-film').toArray()
+	    for (let item of movie_items) {
+	        const movie_name = $(item)
+	        	.find('.films_name')
+	        	.text()
+	        	.replace(/\./g, '[dot]')
+	        
+	        const movie_link = 'https://' + 
+	        	$(item).find('.films_right')
+	        		.find('a').attr('href')
+	        		.match(/kinoafisha.+/)[0]
+
+
+	        const schedule_block = $(item).find('.showtimes_cell').eq(1)
+	        schedule[movie_name] = this.parse_and_form_schedule(schedule_block)
+	        movie_links.push(movie_link)
+	    }
+
+	    let schema = {
+	        name,
+	        metros,
+	        address,
+	        location,
+	        telephone,
+	        schedule,
+	        movie_links
+	    }
+
+	    for (let field in schema) {
+	    	if (!schema[field]) delete schema[field]
+	    }
+
+	    return schema
+	},
+
+	makeMovieSchema(data) {		
+	    let $ = cheerio.load(data)
+
+	    const name = $('meta[property="og:title"]').attr('content').trim().slice(0, -7)
+	    const directors = this.array_from($('.movieInfoV2_producerBadge'), $)
+	    const poster = $('.movieInfoV2_posterImage').attr('src')
+
+	    let schema = {
+	        name,
+	        directors,
+	        poster
+	    }
+
+
+	    try {
+	        let trailer = JSON.parse($('.combinedPlayer').attr('data-param'))
+	        if (trailer.youtube === undefined) {
+	        	schema['trailer'] = ['video', trailer.files.low.path]
+	        } else {
+	        	schema['trailer'] = ['youtube', trailer.youtube]
+	        }
+	    } catch(err) {
+	    	Errors.add('На киноафише нет трейлера', name)
+	    }
+
+	    for (let field in schema) {
+	    	if (!schema[field]) delete schema[field]
+	    }
+
+	    return schema
 	}
+}
 
+const Kinoafisha = {
+	request_options: {
+		headers: {
+			'Accept': 'text/plain',
+			'User-Agent': 'Mozilla/5.0 (Macintosh; ' + 
+				'Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 ' + 
+				'(KHTML, like Gecko) Version/12.1 Safari/605.1.15'
+		}
+	},
 
+	async getCinemaLinks() {
+		let cities = ['spb']
+		let cinema_links = []
 
-	static async getCinemasData() {
-		const cinemas_href = await Loader.getCinemas()
-		let cinemas = [], movies_showcount = {}, movies_href = new Set()
-
-		for (let href of cinemas_href) {
-			try { 
-				var { data: cinema_page } = await axios.get(href)
-			} catch (err) {
-				console.log(err)
-				continue
-			}
-
-		    let $ = cheerio.load(cinema_page)
-
-		    const _id = Number( href.match(/\d+/)[0] )
-		    const name = $('.grid').find('h1').text()
-		    const metros = this.str_to_array( $('.metro').text() )
-		    const address = $('span[itemprop="address"]').text().trim()
-		    const telephone = $('.theaterInfo_phone').text()
-
-		    const coords = [ $('meta[itemprop="longitude"]').attr('content'), 
-		    				 $('meta[itemprop="latitude"]').attr('content') ]
-		    const location = { type: 'Point', 
-		    				   coordinates: coords.map(coord => Number(coord)) }
-
-		    let schedule = {}
-		    const movie_items = $('.showtimes_item.fav-film').toArray()
-		    for (let item of movie_items) {
-		        let movie_name = $(item).find('.films_name').text()
-		        let movie_href = $(item).find('.films_right').find('a').attr('href')
-		        movie_href = 'https://' + movie_href.match(/kinoafisha.+/)[0]
-		        if (movie_name === 'Vox Lux')  movie_name = 'Вокс люкс'
-
-		        const schedule_block = $(item).find('.showtimes_cell').eq(1)
-				const correct_name = movie_name.replace(/\./g, '[dot]')
-		        schedule[correct_name] = this.parse_and_form_schedule(schedule_block)
-		        movies_href.add(movie_href)
-
-
-		        movies_showcount[movie_name] ? 
-		        	movies_showcount[movie_name]++ : movies_showcount[movie_name] = 1
-
-		    }
-
-		    cinemas.push({
-		        _id,
-		        name,
-		        metros,
-		        address,
-		        location,
-		        telephone,
-		        schedule
-		    })
+		for (let city of cities) {
+			const { data } = await axios.get(
+				`https://${city}.kinoafisha.info/cinema/`, 
+				this.request_options
+			)
+			cinema_links = Parser.getLinks(data) 
+		
 		}
 
-		return { cinemas, movies_href, movies_showcount }
-	}
+     	return cinema_links
+     		// .slice(0, 10)
+	},
 
+	async getCinemasData() {
+		const cinema_links = await this.getCinemaLinks()
+		let cinemas = [], movie_showcounts = {}, all_movie_links = new Set()
 
-	static async getMoviesData(movies_href, movies_showcount) {
-		const ratings = await Loader.getMovieRatings()
+		for (let cin_link of cinema_links) {
+			const { data } = await axios.get(cin_link, this.request_options)
+			let { movie_links, ...cinema } = Parser.makeCinemaSchema(data)
+			
+			cinema._id = +cin_link.match(/\d+/)[0]
+			cinemas.push(cinema)
+
+			for (let mov_link of movie_links) {
+				movie_showcounts[mov_link] ?
+					movie_showcounts[mov_link]++ :
+					movie_showcounts[mov_link] = 1
+
+				all_movie_links.add(mov_link)
+			}
+		}
+
+		return { cinemas, all_movie_links, movie_showcounts }
+	},
+
+	async getMoviesData(movie_links, movie_showcounts) {
 		let movies = []
 
-		for (let href of movies_href) {
-			try {
-		    	var {data: movie_page} = await axios.get(href)
-		    } catch (err) {
-		    	console.log(err)
-		    	continue
-		    }
+		for (let link of movie_links) {
+		    const { data } = await axios.get(link, this.request_options)
 
-		    let $ = cheerio.load(movie_page)
+		    let movie = Parser.makeMovieSchema(data)
+		    movie._id = +link.match(/\d+/)[0]
+		    movie.showcounts = movie_showcounts[link]
 
-		    const _id = Number( href.match(/\d+/)[0] )
-		    let name = $('.movieInfo_main.grid_cell8').find('h1').text().trim().slice(0, -6)
-		    const original_name = $('span[itemprop="alternativeHeadline"]').text().trim()
-		    const genre = $('a[itemprop="genre"]').text().trim()
-		    const country = this.str_to_array( $('span[itemprop="countryOfOrigin"]').text() )
-		    const director = this.str_to_array( $('span[itemprop="director"]').text() )
-		    const duration = $('span[itemprop="duration"]').text()
-		    const actors = this.str_to_array( $('span[itemprop="actor"]').text() )
-		    const poster = $('.movieInfo_posterImage').attr('src')
+		    movies.push(movie)
 
-		    name == 'Vox Lux' ? name = 'Вокс люкс' : name
-		    const showcounts = movies_showcount[name]
-
-
-		    let schema = {
-		        _id,
-		        name,
-		        original_name,
-		        genre,
-		        country,
-		        director,
-		        duration,
-		        actors,
-		        showcounts,
-		        poster
-		    }
-
-
-		    try {
-		        let trailer = JSON.parse($('.combinedPlayer').attr('data-param'))
-		        if (trailer.youtube === undefined) {
-		        	schema['trailer'] = ['video', trailer.files.low.path]
-		        } else {
-		        	schema['trailer'] = ['youtube', trailer.youtube]
-		        }
-		    } catch(err) {
-		    	Errors.add('На киноафише нет трейлера', name)
-		    }
-
-		    
-		    let name_in_ratings
-		    if (ratings[name]) {
-		        name_in_ratings = name
-		    } else {
-		        for (let movie in ratings) {		
-					const name_begin = name
-						.toLowerCase()
-						.replace(/ё/g, 'е')
-						.match(/[а-я]+|[a-z]+/)[0]
-					
-
-	                const movie_begin = movie
-	                	.toLowerCase()
-	                	.replace(/ё/g, 'е')
-	                	.match(/[а-я]+|[a-z]+/)[0]
-
-	                if (name_begin === movie_begin) {
-	                    name_in_ratings = movie
-	                }
-		        }
-		    }
-
-		    if (name_in_ratings) {
-		    	const { data: rating_xml } = await axios.get(ratings[name_in_ratings].link)
-		    	const imdb_regexp = />(\d+|\d+\.\d+)<\/imdb_rating/g
-
-		    	let imdb = imdb_regexp.exec(rating_xml)
-		    	imdb = imdb ? Math.round(Number(imdb[1]) * 10) / 10 : imdb
-		    	let kp = ratings[name_in_ratings].kp_rating
-
-		    	if (kp || imdb) {
-		    		schema.rating = {}
-		    		if (kp) schema.rating.kp = (kp.length === 1) ? kp + '.0' : kp
-		    		if (imdb) schema.rating.imdb = (imdb.length === 1) ? imdb + '.0' : imdb
-		    	}
-		    } else {
-		    	Errors.add('Кинопоиск не нашел рейтинг для фильма', name)
-		    }
-
-		    movies.push(schema)
 		}
 		return movies
 	}
 }
 
-
-class Extra {
-	static async modifySomeDataInto(movies) {
-		const kh_url = 'https://kinohod.ru/api/rest/site/v1/movies/?sort=showcount'
-		const headers = { 
+const Extra = {
+	request_options: {
+		headers: {
 			'X-Requested-With': 'XMLHttpRequest',
 			'Accept': 'application/json'
-	  	}
+		}
+	},
+
+	async getMoviesFromKinopoisk() {
+		const kp_url = 'https://www.kinopoisk.ru/api/afisha/films/?limit=15'
+
+		const documents_total = (await axios.get(kp_url, this.request_options))
+			.data
+			.pagination
+			.total
+
+		let kinopoisk_movies = []
+		let batch_number = 0
+		let batch_url, items
+
+		do {
+		  batch_url = kp_url + `&offset=${batch_number * 15}`
+		  items = (await axios.get(batch_url, this.request_options)).data.items
+
+		  kinopoisk_movies.push(...items)
+		  batch_number++
+		} while (items.length)
+
+		Errors.add('Кинопоиск отдал не все файлы', 
+			`${documents_total} - найдено. ${kinopoisk_movies.length} - получено.`)
+
+
+		kinopoisk_movies = kinopoisk_movies.map((movie) => {
+
+			let schema = {
+				name: movie.title.trim(),
+				original_name: movie.originalTitle,
+				year: movie.year,
+				genres: movie.genres,
+				countries: movie.countries,
+				duration: +movie.duration,
+				rating: +movie.ratings.kp.value,
+				poster: 'https:' + movie.img.posterSmall.x1
+			}
+
+			for (let field in schema) {
+	  			if (!schema[field]) delete schema[field]
+	  		}
+
+	  		return schema
+		})
+
+	  	return kinopoisk_movies
+	},
+
+	async getMoviesFromKinohod() {
+		const kh_url = 'https://kinohod.ru/api/rest/site/v1/movies/?sort=showcount'
 	  
-	  	const { data: kinohod_movies } = await axios.get(kh_url, { headers })
+	  	let { data: kinohod_movies } = await axios.get(kh_url, this.request_options)
 
-	  	for (let db_mov of movies) {
-	  		let matched = false
-	  		const title_chars = db_mov
-	  			.name
-	  			.replace(/ё/g, 'е')
-	  			.toLowerCase()
-	  			.match(/[a-я]+/g)
+	  	kinohod_movies = kinohod_movies.map((movie) => {
+	  		try {
+		  		var poster = movie.posterLandscape.name
+		  		poster = 'https://st2.kinohod.ru/c/600x320/' + 
+		  			`${poster.slice(0, 2)}/${poster.slice(2, 4)}/${poster}`
 
-	  		for (let kh_mov of kinohod_movies) {
-	  			const kh_title = kh_mov.title.toLowerCase()
-	  			if ( title_chars.every((char) => kh_title.includes(char)) ) {
-	  				matched = true
+		  		var trailer = movie.trailers[0].mobile_mp4.filename
+		  		trailer = 'https://kinohod.ru/o/' +
+		  			`${trailer.slice(0, 2)}/${trailer.slice(2, 4)}/${trailer}`
+		  		trailer = ['video', trailer]
 
-			  		try {
-		  				db_mov['age'] = kh_mov.ageRestriction
-			
-				  		let kh_poster = kh_mov.posterLandscape.name
-				  		kh_poster =	
-				  			'https://st2.kinohod.ru/c/600x320/' + 
-				  			`${kh_poster.slice(0, 2)}/${kh_poster.slice(2, 4)}/` +
-				  			kh_poster
-
-				  		db_mov['poster'] = kh_poster
-
-			  			let kh_trailer = kh_mov.trailers[0].mobile_mp4.filename
-			  			kh_trailer = 
-			  				'https://kinohod.ru/o/' +
-			  				`${kh_trailer.slice(0, 2)}/${kh_trailer.slice(2, 4)}/` +
-			  				kh_trailer
-
-			  			// db_mov['trailer'] = ['video', kh_trailer]
-			  			if (!db_mov['trailer'] || db_mov['trailer'][0] === 'youtube') {
-			  				db_mov['trailer'] = ['video', kh_trailer]
-			  			}
-			  		} catch (err) {
-			  			Errors.add('На киноходе нет трейлера для фильма', db_mov.name)
-			  		}
-
-	  			}
+		  	} catch (err) {
+		  		Errors.add('На киноходе нет трейлера', movie.title)
+		  	}
+	  		
+	  		let schema = {
+	  			name: movie.title.trim(),
+	  			duration: +movie.duration,
+	  			age: movie.ageRestriction,
+	  			kinohod_showcounts: +movie.countScreens,
+	  			rating: +movie.imdb_rating,
+	  			poster, trailer
 	  		}
 
-	  		if (!matched) {
-	  			Errors.add('У кинохода нет информации по этому фильму', db_mov.name)
+	  		for (let field in schema) {
+	  			if (!schema[field]) delete schema[field]
 	  		}
-	  	}
-	}	
+
+	  		return schema
+	  	})
+
+	  	return kinohod_movies
+	},
+
+	async completeMoviesData(movies) {
+		const kp_movies = await this.getMoviesFromKinopoisk()
+		const kh_movies = await this.getMoviesFromKinohod()
+
+		function unify(name) {
+			return name
+				.toLowerCase()
+				.replace(/ё/g, 'е')
+				.replace(/[.,"':«»-\s]/g, '')
+		}
+
+		movies.forEach((movie) => {
+			let kp_matched = false, kh_matched = false
+
+			let name_unify
+			if (!movie.name) {
+				console.log(movie)
+				return
+			} else {
+				name_unify = unify(movie.name)
+			}
+
+			for (let kp_mov of kp_movies) {
+				if ( kp_mov.name && name_unify === unify(kp_mov.name) ) {
+					delete kp_mov.name
+					kp_mov.rating = { kp: kp_mov.rating }
+
+					Object.assign(movie, kp_mov)
+					kp_matched = true
+					break
+				}
+			}
+
+			for (let kh_mov of kh_movies) {
+				if ( kh_mov.name && name_unify === unify(kh_mov.name) ) {
+					delete kh_mov.name
+					kh_mov.rating = movie.rating ? 
+						{ kp: movie.rating.kp, imdb: kh_mov.rating } :
+						{ imdb: kh_mov.rating }
+					
+					Object.assign(movie, kh_mov)
+					kh_matched = true
+					break
+				}
+			}
+
+
+			if (!kp_matched) Errors.add('На кинопоиске нет фильма', movie.name)
+			if (!kh_matched) Errors.add('На киноходе нет фильма', movie.name)	
+		})
+
+		for (let kp_mov of kp_movies) {
+			if (kp_mov.name) {
+				Errors.add('Не использованные фильмы кинопоиска', kp_mov.name)
+			}
+		}
+
+		for (let kh_mov of kh_movies) {
+			if (kh_mov.name) {
+				Errors.add('Не использованные фильмы кинохода', kh_mov.name)
+			}
+		}
+	}
 }
 
 
-class dbUser {
-	static async pushIntoDB(movies, cinemas) {
-		const URI = 'mongodb+srv://update_script:update_pass@cluster0-uwr4g.mongodb.net/test?retryWrites=true'
-		const client = await MongoClient.connect(URI, { useNewUrlParser: true })
+const DB = {
+	async cleanPush(movies, cinemas) {
+		const url = process.env.fill_db_url
+		const client = await MongoClient.connect(url, { useNewUrlParser: true })
 		const db = await client.db('bot-node')
 
 
@@ -372,15 +401,15 @@ class dbUser {
 
 
 
-(async function update() {
-	const { cinemas, movies_href, movies_showcount } = await Parser.getCinemasData()
+;(async function update() {
+	const { cinemas, all_movie_links, movie_showcounts } = await Kinoafisha.getCinemasData()
 	console.log('Информация о кинотеатрах загружена')
-	let movies = await Parser.getMoviesData(movies_href, movies_showcount)
+	let movies = await Kinoafisha.getMoviesData(all_movie_links, movie_showcounts)
 	console.log('Информация по фильмам тоже')
 
-	await Extra.modifySomeDataInto(movies)
-	console.log('Небольшое вмешательство кинохода')
-	await dbUser.pushIntoDB(movies, cinemas)
+	await Extra.completeMoviesData(movies)
+	console.log('Подгрузили информацию с кинохода и кинопоиска')
+	await DB.cleanPush(movies, cinemas)
 	console.log('База данных обновлена!')
 
 })().catch(err => console.log(err))
