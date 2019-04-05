@@ -74,35 +74,40 @@ const Cook = {
 				}
 
 				if (inline_keyboard.length >= 8) {
-					keyboards.push(inline_keyboard)
+					keyboards.push({
+						_id: ObjectID(),
+						keyboard: inline_keyboard
+					})
 					inline_keyboard = []
 				}
 			})
 
-			if (keyboards.length === 0) keyboards.push(inline_keyboard)
-
-			let keyboards_id = []
-			for (let _ of keyboards) {
-				keyboards_id.push( ObjectID() )
+			if (keyboards.length === 0) {
+				keyboards.push({
+					_id: ObjectID(),
+					keyboard: inline_keyboard
+				})
 			}
 
-			for (let [i, keyboard] of Object.entries(keyboards)) {
+
+			for (let [i, { keyboard }] of Object.entries(keyboards)) {
 				let nav_bar = []
 				for (let page in keyboards) {
 					nav_bar.push({ 
-						text: (page === i) ? `·${Number(page) + 1}·` : `${Number(page) + 1}`,
-						callback_data: `(inline)[${keyboards_id[page]}]`
+						text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
+						callback_data: `(inline)[${keyboards[page]._id}]`
 					})
 				}
 				keyboard.unshift(nav_bar)
 			}
 
 
+			const { keyboard: entry_keyboard } = keyboards[0]
 			msg = '*Расписание на сегодня:*'
 			options = {
 				parse_mode: 'markdown',
 				reply_markup: JSON.stringify({
-					inline_keyboard: keyboards[0]
+					inline_keyboard: entry_keyboard
 				})
 			}
 
@@ -111,23 +116,18 @@ const Cook = {
 	},
 
 	cinemaMsg(cinema) {
-		let cinema_info = []
-
-		cinema_info.push(
+		const location = [
 			cinema.location.coordinates[1], 
 			cinema.location.coordinates[0]
-		)
-		cinema_info.push(
-			cinema.metros[0] ?
-				cinema.name + '  🚇' + cinema.metros[0] :
-				cinema.name
-		)
-		cinema_info.push(
-			cinema.telephone ? 
-				`${cinema.address}\n${cinema.telephone}` :
-				cinema.address
-		)
-		cinema_info.push({ 'foursquare_type': 'arts_entertainment/cinema' })
+		]
+
+		let address = ''
+		if (cinema.metros) address += '🚇' + cinema.metros[0] + '\n'
+		address += cinema.address
+		if (cinema.telephone) address += '\n' + cinema.telephone
+
+		const cinema_info = [...location, cinema.name, address]
+
 
 		let keyboards = []
 		let inline_keyboard = []
@@ -161,34 +161,40 @@ const Cook = {
 			}
 
 			if (inline_keyboard.length >= 8) {
-				keyboards.push(inline_keyboard)
+				keyboards.push({
+					_id: ObjectID(),
+					keyboard: inline_keyboard
+				})
 				inline_keyboard = []
 			}
 		}
-		if (keyboards.length === 0) keyboards.push(inline_keyboard)
-
-		let keyboards_id = []
-		for (let _ of keyboards) {
-			keyboards_id.push( ObjectID() )
+		if (keyboards.length === 0) {
+			keyboards.push({
+				_id: ObjectID(),
+				keyboard: inline_keyboard
+			})
 		}
 
-		for (let [i, keyboard] of Object.entries(keyboards)) {
+
+		for (let [i, { keyboard }] of Object.entries(keyboards)) {
 			let nav_bar = []
 			for (let page in keyboards) {
 				nav_bar.push({ 
-					text: (page === i) ? `·${Number(page) + 1}·` : `${Number(page) + 1}`,
-					callback_data: `(inline)[${keyboards_id[page]}]`
+					text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
+					callback_data: `(inline)[${keyboards[page]._id}]`
 				})
 			}
 			keyboard.unshift(nav_bar)
 		}
+
+		const { keyboard: entry_keyboard } = keyboards[0]
 
 		const cinema_schedule = [ 
 			'*Сегодня в кинотеатре:*',  
 			{	
 				parse_mode: 'markdown',
 				reply_markup: JSON.stringify({ 
-					inline_keyboard: keyboards[0]
+					inline_keyboard: entry_keyboard
 				}) 
 			} 
 		]
@@ -199,36 +205,10 @@ const Cook = {
 	nearestMsg(cinemas) {
 		let keyboards = []
 		let inline_keyboard = []
+		let header
 
-		const header = [{
-			text: '● Поблизости',
-			callback_data: '(null)'
-		}]
-
-		let pages = []
-		for (let i = 1; i <= Math.ceil(cinemas.length / 6); i++) {
-			pages.push({
-				text: `${i}`,
-				callback_data: `(inline)[${ObjectID()}]`
-			})
-		}
 
 		for (let [ i, cinema ] of Object.entries(cinemas)) {
-			if (inline_keyboard.length === 0) {
-				let pages_with_state = pages.map((page) => {
-					let state_page = { callback_data: page.callback_data }
-
-					if (page.text == keyboards.length + 1) {
-						state_page.text = `·${page.text}·`
-					} else {
-						state_page.text = page.text
-					}
-
-					return state_page
-				})
-
-				inline_keyboard.push(header, pages_with_state)
-			}
 			
 			const callback_data = `(cinema)[${cinema._id}]`
 			let text = `${cinema.name} ~ ${cinema.distance} км`
@@ -242,9 +222,30 @@ const Cook = {
 			inline_keyboard.push([{ text, callback_data }])
 
 			if (inline_keyboard.length % 8 === 0 || i + 1 === cinemas.length) {
-				keyboards.push(inline_keyboard)
+				keyboards.push({
+					_id: ObjectID(),
+					keyboard: inline_keyboard
+				})
 				inline_keyboard = []
 			}
+		}
+
+		const { _id: header_id, keyboard: entry_keyboard } = keyboards[0]
+		
+		header = [{
+			text: '● Поблизости',
+			callback_data: `(inline)[${header_id}]`
+		}]
+
+		for (let [i, { keyboard }] of Object.entries(keyboards)) {
+			let nav_bar = []
+			for (let page in keyboards) {
+				nav_bar.push({ 
+					text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
+					callback_data: `(inline)[${keyboards[page]._id}]`
+				})
+			}
+			keyboard.unshift(header, nav_bar)
 		}
 
 		const msg = [
@@ -252,7 +253,7 @@ const Cook = {
 			{ 
 				reply_markup: 
 					JSON.stringify({ 
-						inline_keyboard: keyboards[0] 
+						inline_keyboard: entry_keyboard 
 					}) 
 			}
 		]
@@ -261,49 +262,103 @@ const Cook = {
 	},
 
 	programMsg(popular, high_rank) {
-		let inline_keyboard = []
-		
-		inline_keyboard.push([{
-			text:'● Сортировка по популярности',
-			callback_data: '(null)'
-		}])
+		function make_keyboards(movies) {
+			let inline_keyboard = [], keyboards = []
 
-		inline_keyboard.push([{
-			text:'Сортировка по рейтингу',
-			callback_data: '(null)'
-		}])
-
-		for (let movie of popular.slice(0, 6)) {
-			let info_block = ''
-			if (movie.genres) info_block += movie.genres[0] + ', '
-			if (movie.rating.kp) info_block += `kp - ${movie.rating.kp} `
-			if (movie.rating.imdb) info_block += `imdb - ${movie.rating.imdb}`
-
-			inline_keyboard.push([
-				{
-					text: `— ${movie.name} —`,
-					callback_data: `(movie)[${movie._id}]`
-				},
-				{
-					text: info_block,
-					callback_data: '(null)'
+			for (let movie of movies) {
+				let info_block = ''
+				if (movie.genres) info_block += movie.genres[0]
+				if (movie.rating) {
+					info_block += ', '
+					if (movie.rating.kp) info_block += `kp - ${movie.rating.kp} `
+					if (movie.rating.imdb) info_block += `imdb - ${movie.rating.imdb}`
 				}
-			])
+				
+
+				inline_keyboard.push([
+					{
+						text: `— ${movie.name} —`,
+						callback_data: `(movie)[${movie._id}]`
+					}
+				])
+
+				inline_keyboard.push([
+					{
+						text: info_block,
+						callback_data: '(null)'
+					}
+				])
+
+				if (inline_keyboard.length === 8) {
+					keyboards.push({
+						_id: ObjectID(),
+						keyboard: inline_keyboard
+					})
+					inline_keyboard = []
+				}
+			}
+
+			if (inline_keyboard.length !== 0) {
+				keyboards.push({
+					_id: ObjectID(),
+					keyboard: inline_keyboard
+				})
+				inline_keyboard = []
+			}
+
+			return keyboards
 		}
 
-		// inline_keyboard.push([{
-		// 	text:'● Самый высокий рейтинг:',
-		// 	callback_data: '(null)'
-		// }])
+		function make_header(first_col, first_inline, second_col, second_inline) {
+			return [
+				{
+					text: first_col,
+					callback_data: `(inline)[${first_inline}]`
+				},
+				{
+					text: second_col,
+					callback_data: `(inline)[${second_inline}]`
+				}
+			]
+		}
 
-		// for (let movie of high_rank) {
-		// 	inline_keyboard.push([{
-		// 		text: `— ${movie.name} ~ ${movie.rating.kp} —`,
-		// 		callback_data: `(movie)[${movie._id}]`
-		// 	}])
-		// }
+		function add_header_and_pages(keyboards, header) {
+			for (let [i, { keyboard }] of Object.entries(keyboards)) {
+				let nav_bar = []
+				for (let page in keyboards) {
+					nav_bar.push({ 
+						text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
+						callback_data: `(inline)[${keyboards[page]._id}]`
+					})
+				}
+				keyboard.unshift(header, nav_bar)
+			}
+		}
 
-		return ['С пылу с жару', { reply_markup: JSON.stringify({ inline_keyboard }) }]
+		const popular_keyboards = make_keyboards(popular)
+		const rating_keyboards = make_keyboards(high_rank)
+
+		const popular_header = make_header(
+			'● Популярность', popular_keyboards[0]._id,
+			'Рейтинг', rating_keyboards[0]._id,
+		)
+		const rating_header = make_header(
+			'Популярность', popular_keyboards[0]._id,
+			'● Рейтинг', rating_keyboards[0]._id,
+		)
+
+		add_header_and_pages(popular_keyboards, popular_header)
+		add_header_and_pages(rating_keyboards, rating_header)
+
+		const keyboards = [...popular_keyboards, ...rating_keyboards]
+
+		const { keyboard: entry_keyboard } = keyboards[0]
+		let program = [
+			'С пылу с жару', 
+			{ reply_markup: JSON.stringify({ inline_keyboard: entry_keyboard }) }
+		]
+
+		return [program, keyboards]
 	}
 
 }
