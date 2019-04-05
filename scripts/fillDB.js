@@ -316,7 +316,7 @@ const Extra = {
 			return name
 				.toLowerCase()
 				.replace(/ё/g, 'е')
-				.replace(/[.,"':«»-\s]/g, '')
+				.replace(/[.,"':«»-\s…]/g, '')
 		}
 
 		movies.forEach((movie) => {
