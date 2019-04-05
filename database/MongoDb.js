@@ -1,4 +1,5 @@
-const MongoClient = require('mongodb').MongoClient;
+const MongoClient = require('mongodb').MongoClient
+const ObjectID = require('mongodb').ObjectID
 
 class MongoDB{
 	constructor(url) {
@@ -264,24 +265,13 @@ class MongoDB{
 
 	async saveInline(keyboards) {
 		const inline = this.db.collection('inline')
-		const pages_line = keyboards[0][0][0].text === '·1·' ? 0 : 1
-
-		const keyboards_obj = keyboards.map((keyboard, i) => {
-			const _id = keyboard[pages_line][i]
-				.callback_data
-				.match(/\[.+\]/)[0]
-				.slice(1, -1)
-
-			return { _id, keyboard }
-		})
-
-		await inline.insertMany(keyboards_obj)
+		await inline.insertMany(keyboards)
 	}
 
-	async getInline(_id) {
+	async getInline(id) {
 		const inline = this.db.collection('inline')
-		const doc = await inline.findOne({ _id })
-		return doc
+		const { keyboard } = await inline.findOne( ObjectID(id) )
+		return keyboard
 	}
 
 }

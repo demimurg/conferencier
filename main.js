@@ -35,15 +35,16 @@ bot.on('text', async (ctx) => {
 	switch (input) {
 		case 'Кинотеатры':
 			const cinemas = await db.cinemasNearby(id)
-			const [ nearest_view, keyboards ] = Cook.nearestMsg(cinemas)
-			await db.saveInline(keyboards)
+			const [ nearest_view, c_keyboards ] = Cook.nearestMsg(cinemas)
+			await db.saveInline(c_keyboards)
 
 			ctx.reply(...nearest_view)
 			break
 
 		case 'Фильмы':
 			const [ most_popular, high_ranking ] = await db.moviesList(id)
-			const movies_program = Cook.programMsg(most_popular, high_ranking)
+			const [ movies_program, m_keyboards ] = Cook.programMsg(most_popular, high_ranking)
+			await db.saveInline(m_keyboards)
 
 			ctx.reply(...movies_program)
 			break
@@ -125,7 +126,7 @@ bot.on('callback_query', async (ctx) => {
 			break
 
 		case 'inline':
-			const { keyboard } = await db.getInline(doc_name)
+			const keyboard = await db.getInline(doc_name)
 			const reply_markup = { inline_keyboard: keyboard }
 			
 			try {
