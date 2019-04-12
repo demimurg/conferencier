@@ -1,10 +1,10 @@
 require('dotenv').config()
 const Telegraf = require('telegraf')
-const MongoDB = require('./database/MongoDb')
+const MongoDbInterface = require('./database/mongoDb')
 const Cook = require('./formatting/msgView')
 
-const bot = new Telegraf( process.env.token )
-const db = new MongoDB( process.env.user_db_url )
+const bot = new Telegraf( process.env.TOKEN )
+const db = new MongoDbInterface( process.env.USER_DB_URL )
 
 
 bot.command('start', async (ctx) => {
@@ -50,7 +50,7 @@ bot.on('text', async (ctx) => {
 			break
 		
 		default:
-			if (input[0] === '/') input = Number(input.slice(1))
+			if (input[0] === '/') input = +input.slice(1)
 
 			const movie_schema = await db.getMovieData(input)
 			if (movie_schema) {
@@ -84,14 +84,14 @@ bot.on('callback_query', async (ctx) => {
 	if (type !== 'null') {
 		doc_name = ctx.callbackQuery
 			.data
-			.match(/\[.+\]/)[0]
+			.match(/\[.+]/)[0]
 			.slice(1, -1)
 	}
 		
 	switch (type) {
 		
 		case 'schedule':
-			const cinemas = await db.getSchedule(id, doc_name)
+			const cinemas = await db.getSchedule(id, +doc_name)
 			const [schedule, keyboards] = Cook.scheduleMsg(cinemas)
 			if (keyboards) await db.saveInline(keyboards)
 
@@ -110,7 +110,7 @@ bot.on('callback_query', async (ctx) => {
 			break
 		
 		case 'cinema':
-			const cinema_object = await db.getCinemaData(Number(doc_name))
+			const cinema_object = await db.getCinemaData(+doc_name)
 			const [ cinema_info, cinema_schedule, cinema_keyboards ] = Cook.cinemaMsg(cinema_object)
 			await db.saveInline(cinema_keyboards)
 
@@ -161,16 +161,23 @@ bot.on('location', async (ctx) => {
 
 
 process.on('launch', async () => {
-	try {
-		await db.init()
-		console.log('База данных подключена')
-	} catch (err) {
-		console.log(err)
-		process.exit()
+	await db.init()
+	console.log('База данных подключена')
+
+	let mode
+	if (process.env.PLATFORM === 'heroku') {
+		mode = {
+			webhook: {
+				domain: process.env.URL,
+				port: process.env.PORT
+			}
+		}
+	} else {
+		mode = { polling: {} }
 	}
 
+	bot.launch(mode)
 	bot.catch((err) => console.log(err))
-	bot.launch()
 })
 process.on('SIGINT', async () => {
 	console.log('\nCоединение с базой данных разорвано')
