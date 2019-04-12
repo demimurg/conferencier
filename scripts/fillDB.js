@@ -316,7 +316,8 @@ const Extra = {
 			return name
 				.toLowerCase()
 				.replace(/ё/g, 'е')
-				.replace(/[.,"':«»-\s…]/g, '')
+				.replace(/[^a-zа-я]/g, '')
+				// .replace(/[.,…"':«»-\s]/g, '')
 		}
 
 		movies.forEach((movie) => {
@@ -375,8 +376,7 @@ const Extra = {
 
 
 const DB = {
-	async cleanPush(movies, cinemas) {
-		const url = process.env.fill_db_url
+	async cleanPush(movies, cinemas, url) {
 		const client = await MongoClient.connect(url, { useNewUrlParser: true })
 		const db = await client.db('bot-node')
 
@@ -409,7 +409,7 @@ const DB = {
 
 	await Extra.completeMoviesData(movies)
 	console.log('Подгрузили информацию с кинохода и кинопоиска')
-	await DB.cleanPush(movies, cinemas)
+	await DB.cleanPush(movies, cinemas, process.env.FILL_DB_URL)
 	console.log('База данных обновлена!')
 
 })().catch(err => console.log(err))
