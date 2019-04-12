@@ -169,6 +169,7 @@ process.on('launch', async () => {
 		mode = {
 			webhook: {
 				domain: process.env.URL,
+				hookPath: `/bot${process.env.TOKEN}`,
 				port: process.env.PORT
 			}
 		}
