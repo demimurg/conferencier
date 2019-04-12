@@ -4,12 +4,12 @@ const Cook = {
 	buttons_in_row: 2,
 
 	previewMsg(movie_schema) {
-		const { name, age, directors, rating, poster } = movie_schema
+		const { _id, name, age, directors, rating, poster } = movie_schema
 
 		let msg = ''
 		msg += `*"${name}"*`
 		if (age) msg += `, _${age}_`
-		msg += `\n_Режиссер_: ${directors[0]}\n`
+		if (directors) msg += `\n_Режиссер_: ${directors[0]}\n`
 
 		if (rating) {
 			msg += '_Рейтинг_:'
@@ -24,8 +24,8 @@ const Cook = {
 			reply_markup: JSON.stringify({
 				inline_keyboard: [
 					[
-						{ text: 'Трейлер', callback_data: `(trailer)[${name.slice(0, 25)}]` },
-						{ text: 'Где посмотреть?', callback_data: `(schedule)[${name.slice(0, 25)}]` }
+						{ text: 'Трейлер', callback_data: `(trailer)[${_id}]` },
+						{ text: 'Где посмотреть?', callback_data: `(schedule)[${_id}]` }
 					]
 				]
 			})
@@ -168,7 +168,7 @@ const Cook = {
 				inline_keyboard = []
 			}
 		}
-		if (keyboards.length === 0) {
+		if (inline_keyboard.length) {
 			keyboards.push({
 				_id: ObjectID(),
 				keyboard: inline_keyboard
@@ -303,7 +303,6 @@ const Cook = {
 					_id: ObjectID(),
 					keyboard: inline_keyboard
 				})
-				inline_keyboard = []
 			}
 
 			return keyboards
