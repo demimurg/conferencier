@@ -1,11 +1,17 @@
-const MongoClient = require('mongodb').MongoClient
-const ObjectID = require('mongodb').ObjectID
+const { MongoClient, ObjectID } = require('mongodb')
 
-class MongoDB{
+function formatTime(time) {
+	if (time >= '00:00' && time <= '04:00') {
+		time = `${+time.slice(0, 2) + 24}${time.slice(2)}`
+	}
+	return time
+}
+
+class MongoDbInterface {
 	constructor(url) {
 		this.url = url
 		this.name = 'bot-node'
-		this.db = 'availible after init'
+		this.db = 'available after init'
 	}
 
 	async init() {
@@ -61,19 +67,18 @@ class MongoDB{
 			await users.updateOne({ _id }, { $set: params })
 		}
 
-		const doc = await users.findOne(
-			{ _id }, 
-			{ projection: { _id: 0, status: 1, location: 1 } }
+		return await users.findOne(
+			{_id},
+			{projection: {_id: 0, status: 1, location: 1}}
 		)
-		return doc
 	}
 
 	async getMovieData(input) {
 		const movies = this.db.collection('movies')
 		let movie_schema
 
-		if ( Number(input) ) {
-			movie_schema = await movies.findOne({ _id: Number(input) })
+		if ( +input ) {
+			movie_schema = await movies.findOne({ _id: +input })
 		} else {
 			input = '"' + input.split(' ').join('" "') + '"'
 			movie_schema = await movies.findOne({ 
@@ -101,7 +106,7 @@ class MongoDB{
 	 	if (schema) {
 	 		let movies = Object.keys(schema.schedule)
 	 		movies.forEach((movie_name) => {
-	 			let correct_name = movie_name.replace(/\[dot\]/g, '.')
+	 			let correct_name = movie_name.replace(/\[dot]/g, '.')
 	 			if (movie_name !== correct_name) {
 	 				schema.schedule[correct_name] = schema.schedule[movie_name]
 	 				delete schema.schedule[movie_name]
@@ -109,25 +114,22 @@ class MongoDB{
 	 			}
 
 	 			schema.schedule[movie_name] = schema.schedule[movie_name]
-	 				.filter((seance) => seance.time >= time || seance.time < '03:00')
+	 				.filter((seance) => formatTime(seance.time) >= formatTime(time))
 
-	 			schema.schedule[movie_name].sort((a, b) => {
-	 				if (a.time <= '03:00' && b.time > '03:00') return true
-	 				else if (b.time <= '03:00' && a.time > '03:00') return false
-	 				else if (a.time > b.time) return true
-	 				else return false
-	 			})
-	 			if (schema.schedule[movie_name].length === 0) delete schema.schedule[movie_name]
+	 			if (!schema.schedule[movie_name].length) {
+	 				delete schema.schedule[movie_name]
+				}
 	 		})
 	 	}
 
 	 	return schema
 	}
 
-	async getSchedule(id, name) {
-		let { location: { coordinates: user_coord } } = await this.userData(id)
+	async getSchedule(user_id, movie_id) {
+		const { location: { coordinates: user_coord } } = await this.userData(user_id)
 		const cinemas = this.db.collection('cinemas')
 
+		let { name } = await this.getMovieData(movie_id)
 		name = name.replace(/\./g, '[dot]')
 		const time = (new Date).toTimeString().slice(0, 5)
 
@@ -140,7 +142,7 @@ class MongoDB{
  					maxDistance: 25000,
 				  	query: { 
 						$or: [
-							{ [`schedule.${name}.time`]: { $gte: time } }, 
+							{ [`schedule.${name}.time`]: { $gte: time } },
 							{ [`schedule.${name}.time`]: { $lte: '03:00' } }
 						]
 				  	},
@@ -157,79 +159,58 @@ class MongoDB{
 				$project: {
 					name: 1,
 					distance: 1,
-					schedule: {
-						$filter: {
-							input: '$schedule',
-							as: 'seance',
-							cond: { 
-								$or: [
-									{ $gte: [ '$$seance.time', time ] },
-									{ $lte: [ '$$seance.time', '03:00' ] }
-								]	
-							}
-						}
-					}
+					schedule: 1
 				}
 			}
 		]).toArray()
 
 		matched_cinemas.forEach((cinema) => {
 			cinema.distance = Math.round(cinema.distance / 10) / 100
-			cinema.schedule.sort((a, b) => {
-				if (a.time <= '03:00' && b.time >= '03:00') return true
-				else if (b.time <= '03:00' && a.time > '03:00') return false
-				else if (a.time > b.time) return true
-				else return false
-			})
+			cinema.schedule = cinema.schedule
+				.filter( (seance) => formatTime(seance.time) >= formatTime(time) )
 		})
 
 		return matched_cinemas
 	}
 
 	async moviesList(id) {
+
+		function goesNear(movie) {
+			const name = movie.name.replace(/\./g, '[dot]')
+			let current_time = (new Date).toTimeString().slice(0, 5)
+			current_time = formatTime(current_time)
+
+			for (let cinema of cinemas_near) {
+				if (name in cinema.schedule && cinema.schedule[name].length) {
+					const last_seance = formatTime(
+						cinema.schedule[name].slice(-1)[0]
+					)
+
+					if (last_seance >= current_time) return true
+				}
+			}
+
+			return false
+		}
+
+		
+	 	const cinemas_near = await this.cinemasNearby(id)
 	 	const movies = this.db.collection('movies')
 
-	 	let most_popular = await movies.find({})
-	 		.sort({'showcounts': -1}).limit(40)
-	 		.project({ name: 1, rating: 1, genres: 1 }).toArray()
+	 	const popular_near = (await movies.find({})
+	 		.sort({'showcounts': -1}).limit(30)
+	 		.project({ name: 1, rating: 1, genres: 1 }).toArray())
+	 		.filter(goesNear)
+			.slice(0, 20)
 
-	 	let high_ranking = await movies.find({})
-	 		.sort({'rating.kp': -1}).limit(40)
-	 		.project({ name: 1, rating: 1, genres: 1 }).toArray()
+	 	const high_ranking_near = (await movies.find({})
+	 		.sort({'rating.kp': -1}).limit(30)
+	 		.project({ name: 1, rating: 1, genres: 1 }).toArray())
+	 		.filter(goesNear)
+			.slice(0, 20)
 
 
-	 	const cinemas = this.db.collection('cinemas')
-	 	const { location } = await this.userData(id)
-	 	const time = (new Date).toTimeString().slice(0, 5)
-
-	 	async function goes_near(movie) {
-	 		const name = movie.name.replace(/\./g, '[dot]')
-
-	 		let cinemas_with_movie = await cinemas.aggregate([
-	 			{
-	 				$geoNear: {
-	 					near: location,
-	 					spherical: true,
-	 					limit: 1,
-	 					maxDistance: 25000,
- 					  	query: { 
- 							$or: [
- 								{ [`schedule.${name}.time`]: { $gte: time } }, 
- 								{ [`schedule.${name}.time`]: { $lte: '03:00' } }
- 							]
- 					  	},
- 					  	distanceField: 'distance'
-	 				}
-	 			}
-	 		]).toArray()
-
-	 		return cinemas_with_movie.length ? true : false
-	 	}
-
-		most_popular = ( await most_popular.filter(goes_near) ).slice(0, 18)
-		high_ranking = ( await high_ranking.filter(goes_near) ).slice(0, 18)
-
-	 	return [most_popular, high_ranking]
+	 	return [popular_near, high_ranking_near]
 	}	
 
 	async cinemasNearby(id) {
@@ -251,7 +232,8 @@ class MongoDB{
 				$project: {
 					name: 1,
 					metros: 1,
-					distance: 1
+					distance: 1,
+					schedule: 1
 				}
 			}
 		]).toArray()
@@ -277,4 +259,4 @@ class MongoDB{
 }
 
 
-module.exports = MongoDB
+module.exports = MongoDbInterface
