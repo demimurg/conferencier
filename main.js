@@ -162,8 +162,7 @@ bot.on('location', async (ctx) => {
 
 process.on('launch', async () => {
 	try {
-		console.log(process.env.USER_DB_URL)
-		await db.init()
+		// await db.init()
 		console.log('База данных подключена')
 
 		let mode
