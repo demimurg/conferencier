@@ -161,28 +161,24 @@ bot.on('location', async (ctx) => {
 
 
 process.on('launch', async () => {
-	try {
-		await db.init()
-		console.log('База данных подключена')
+	await db.init()
+	console.log('База данных подключена')
 
-		let mode
-		if (process.env.PLATFORM === 'heroku') {
-			mode = {
-				webhook: {
-					domain: process.env.URL,
-					hookPath: `/bot${process.env.TOKEN}`,
-					port: process.env.PORT
-				}
+	let mode
+	if (process.env.PLATFORM === 'heroku') {
+		mode = {
+			webhook: {
+				domain: process.env.URL,
+				hookPath: `/bot${process.env.TOKEN}`,
+				port: process.env.PORT
 			}
-		} else {
-			mode = { polling: {} }
 		}
-
-		bot.launch(mode)
-		bot.catch((err) => console.log(err))
-	} catch (err) {
-		console.log(err)
+	} else {
+		mode = { polling: {} }
 	}
+
+	bot.launch(mode)
+	bot.catch((err) => console.log(err))
 })
 process.on('SIGINT', async () => {
 	console.log('\nCоединение с базой данных разорвано')
