@@ -168,12 +168,11 @@ const Cook = {
 				inline_keyboard = []
 			}
 		}
-		if (inline_keyboard.length) {
-			keyboards.push({
-				_id: ObjectID(),
-				keyboard: inline_keyboard
-			})
-		}
+		
+		keyboards.push({
+			_id: ObjectID(),
+			keyboard: inline_keyboard
+		})
 
 
 		for (let [i, { keyboard }] of Object.entries(keyboards)) {
