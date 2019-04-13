@@ -1,4 +1,4 @@
-// require('dotenv').config()
+require('dotenv').config()
 const Telegraf = require('telegraf')
 const MongoDbInterface = require('./database/mongoDb')
 const Cook = require('./formatting/msgView')
@@ -162,7 +162,7 @@ bot.on('location', async (ctx) => {
 
 process.on('launch', async () => {
 	try {
-		// await db.init()
+		await db.init()
 		console.log('База данных подключена')
 
 		let mode
@@ -175,7 +175,7 @@ process.on('launch', async () => {
 				}
 			}
 		} else {
-			mode = {polling: {}}
+			mode = { polling: {} }
 		}
 
 		bot.launch(mode)
