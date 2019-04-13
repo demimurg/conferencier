@@ -1,4 +1,4 @@
-require('dotenv').config()
+// require('dotenv').config()
 const Telegraf = require('telegraf')
 const MongoDbInterface = require('./database/mongoDb')
 const Cook = require('./formatting/msgView')
@@ -162,6 +162,7 @@ bot.on('location', async (ctx) => {
 
 process.on('launch', async () => {
 	try {
+		console.log(process.env.USER_DB_URL)
 		await db.init()
 		console.log('База данных подключена')
 
