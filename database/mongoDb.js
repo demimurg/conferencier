@@ -1,7 +1,7 @@
 const { MongoClient, ObjectID } = require('mongodb')
 
 function formatTime(time) {
-	if (time >= '00:00' && time <= '04:00') {
+	if (time >= '00:00' && time <= '02:30') {
 		time = `${+time.slice(0, 2) + 24}${time.slice(2)}`
 	}
 	return time
