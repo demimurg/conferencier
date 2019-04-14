@@ -162,7 +162,7 @@ bot.on('location', async (ctx) => {
 
 process.on('launch', async () => {
 	// await db.init()
-	console.log('База данных подключена')
+	// console.log('База данных подключена')
 
 	let mode
 	if (process.env.PLATFORM === 'heroku') {
@@ -180,9 +180,10 @@ process.on('launch', async () => {
 	try {
 		bot.launch(mode)
 	} catch(err) {
+		console.log('ERROR ON LAUNCH]\n\n\n\n\n')
 		console.log(err)
 	}
-	// bot.catch((err) => console.log(err))
+	bot.catch((err) => console.log(err))
 })
 process.on('SIGINT', async () => {
 	console.log('\nCоединение с базой данных разорвано')
