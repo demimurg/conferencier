@@ -177,7 +177,11 @@ process.on('launch', async () => {
 		mode = { polling: {} }
 	}
 
-	bot.launch(mode)
+	try {
+		bot.launch(mode)
+	} catch(err) {
+		console.log(err)
+	}
 	bot.catch((err) => console.log(err))
 })
 process.on('SIGINT', async () => {
