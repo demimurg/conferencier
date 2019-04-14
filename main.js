@@ -161,7 +161,7 @@ bot.on('location', async (ctx) => {
 
 
 process.on('launch', async () => {
-	await db.init()
+	// await db.init()
 	console.log('База данных подключена')
 
 	let mode
@@ -182,7 +182,7 @@ process.on('launch', async () => {
 	} catch(err) {
 		console.log(err)
 	}
-	bot.catch((err) => console.log(err))
+	// bot.catch((err) => console.log(err))
 })
 process.on('SIGINT', async () => {
 	console.log('\nCоединение с базой данных разорвано')
