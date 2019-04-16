@@ -208,15 +208,14 @@ const Cook = {
 
 
 		for (let [ i, cinema ] of Object.entries(cinemas)) {
-			
 			const callback_data = `(cinema)[${cinema._id}]`
 			let text = `${cinema.name} ~ ${cinema.distance} км`
-			if (cinema.metros) {
-				const metro = cinema.metros[0]
-					.replace(/ \/ .+/g, '')
+			// if (cinema.metros) {
+			// 	const metro = cinema.metros[0]
+			// 		.replace(/ \/ .+/g, '')
 
-				text += `  (${metro})`
-			}
+			// 	text += `  (${metro})`
+			// }
 			
 			inline_keyboard.push([{ text, callback_data }])
 
