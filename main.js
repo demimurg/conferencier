@@ -178,8 +178,13 @@ process.on('launch', async () => {
 		mode = { polling: {} }
 	}
 
-	bot.launch(mode)
-	bot.catch((err) => console.log(err))
+	try {
+		bot.launch(mode)
+		bot.catch((err) => console.log(err))
+	} catch(err) {
+		console.log(err)
+	}
+	
 })
 process.on('SIGINT', async () => {
 	console.log('\nCоединение с базой данных разорвано')
