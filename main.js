@@ -3,8 +3,10 @@ const Telegraf = require('telegraf')
 const MongoDbInterface = require('./database/mongoDb')
 const Cook = require('./formatting/msgView')
 
-const bot = new Telegraf( process.env.TOKEN )
-const db = new MongoDbInterface( process.env.USER_DB_URL )
+const {TOKEN, USER_DB_URL, URL, PORT, PLATFORM} = process.env
+
+const bot = new Telegraf(TOKEN)
+const db = new MongoDbInterface(USER_DB_URL)
 
 
 bot.command('start', async (ctx) => {
@@ -164,12 +166,12 @@ process.on('launch', async () => {
 	await db.init()
 
 	let mode
-	if (process.env.PLATFORM === 'heroku') {
+	if (PLATFORM === 'heroku') {
 		mode = {
 			webhook: {
-				domain: process.env.URL,
-				hookPath: `/bot${process.env.TOKEN}`,
-				port: process.env.PORT
+				domain: URL,
+				hookPath: `/bot${TOKEN}`,
+				port: PORT
 			}
 		}
 	} else {
