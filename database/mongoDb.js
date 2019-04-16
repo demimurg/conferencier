@@ -16,7 +16,6 @@ class MongoDbInterface {
 
 	async init() {
 		try {
-			console.log(this.url)
 			this.client = new MongoClient(this.url, {useNewUrlParser: true})
 			await this.client.connect()
 			this.db = this.client.db(this.name)
