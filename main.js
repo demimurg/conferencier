@@ -186,7 +186,7 @@ process.on('launch', async () => {
 	}
 	
 })
-process.on('SIGINT', async () => {
+process.on('SIGTERM', async () => {
 	console.log('\nCоединение с базой данных разорвано')
 	await db.close()
 	process.exit()
