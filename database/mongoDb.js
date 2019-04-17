@@ -1,5 +1,12 @@
 const { MongoClient, ObjectID } = require('mongodb')
 
+function timeToGMT(offset = 0) {
+	 let hours = (new Date).getUTCHours() + offset
+	 if (hours > 23) hours = 24 - hours
+	 if (hours < 0) hours = 24 + hours
+ return `${hours}:${date.getUTCMinutes()}`
+}
+
 function formatTime(time) {
 	if (time >= '00:00' && time <= '02:30') {
 		time = `${+time.slice(0, 2) + 24}${time.slice(2)}`
@@ -44,7 +51,7 @@ class MongoDbInterface {
 		} catch (err) {
 			await users.updateOne({ _id }, { $set: { name, location, updated } } )
 		}
-		
+
 	}
 
 	async userData(_id, params={}) {
@@ -80,8 +87,8 @@ class MongoDbInterface {
 			movie_schema = await movies.findOne({ _id: +input })
 		} else {
 			input = '"' + input.split(' ').join('" "') + '"'
-			movie_schema = await movies.findOne({ 
-				$text: { $search: input } 
+			movie_schema = await movies.findOne({
+				$text: { $search: input }
 			})
 		}
 
@@ -90,18 +97,18 @@ class MongoDbInterface {
 
 	async getCinemaData(input) {
 	 	const cinemas = this.db.collection('cinemas')
-	 	const time = (new Date).toTimeString().slice(0, 5)
+	 	const time = timeToGMT(3)
 
 	 	let schema
 	 	if (typeof(input) === 'number') {
 	 		schema = await cinemas.findOne({ _id: input })
 	 	} else {
 	 		input = '"' + input.split(' ').join('" "') + '"'
-	 		schema = await cinemas.findOne({ 
-				$text: { $search: input } 
+	 		schema = await cinemas.findOne({
+				$text: { $search: input }
 			})
 	 	}
-	 	
+
 	 	if (schema) {
 	 		let movies = Object.keys(schema.schedule)
 	 		movies.forEach((movie_name) => {
@@ -130,22 +137,22 @@ class MongoDbInterface {
 
 		let { name } = await this.getMovieData(movie_id)
 		name = name.replace(/\./g, '[dot]')
-		const time = (new Date).toTimeString().slice(0, 5)
+		const time = timeToGMT(3)
 
 		const matched_cinemas = await cinemas.aggregate([
 			{
 				$geoNear: {
-				  	near: { type: "Point", coordinates: user_coord },
-				  	spherical: true,
-				  	limit: 12,
- 					maxDistance: 25000,
-				  	query: { 
+					near: { type: "Point", coordinates: user_coord },
+					spherical: true,
+					limit: 12,
+					maxDistance: 25000,
+					query: {
 						$or: [
 							{ [`schedule.${name}.time`]: { $gte: time } },
 							{ [`schedule.${name}.time`]: { $lte: '03:00' } }
 						]
-				  	},
-				  	distanceField: 'distance'
+					},
+					distanceField: 'distance'
 				}
 
 			},
@@ -176,7 +183,7 @@ class MongoDbInterface {
 
 		function goesNear(movie) {
 			const name = movie.name.replace(/\./g, '[dot]')
-			let current_time = (new Date).toTimeString().slice(0, 5)
+			let current_time = timeToGMT(3)
 			current_time = formatTime(current_time)
 
 			for (let cinema of cinemas_near) {
@@ -192,7 +199,7 @@ class MongoDbInterface {
 			return false
 		}
 
-		
+
 	 	const cinemas_near = await this.cinemasNearby(id)
 	 	const movies = this.db.collection('movies')
 
@@ -210,7 +217,7 @@ class MongoDbInterface {
 
 
 	 	return [popular_near, high_ranking_near]
-	}	
+	}
 
 	async cinemasNearby(id) {
 		let { location: user_loc } = await this.userData(id)
@@ -219,11 +226,11 @@ class MongoDbInterface {
 		const nearest = await cinemas.aggregate([
 			{
 				$geoNear: {
-				  	near: user_loc,
-				  	spherical: true,
-				  	limit: 24,
- 					maxDistance: 25000,
-				  	distanceField: 'distance'
+					near: user_loc,
+					spherical: true,
+					limit: 24,
+					maxDistance: 25000,
+					distanceField: 'distance'
 				}
 
 			},
@@ -254,7 +261,7 @@ class MongoDbInterface {
 		const { keyboard } = await inline.findOne( ObjectID(id) )
 		return keyboard
 	}
-	
+
 }
 
 
