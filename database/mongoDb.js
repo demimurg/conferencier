@@ -1,10 +1,11 @@
 const { MongoClient, ObjectID } = require('mongodb')
 
 function timeToGMT(offset = 0) {
-	 let hours = (new Date).getUTCHours() + offset
-	 if (hours > 23) hours = 24 - hours
-	 if (hours < 0) hours = 24 + hours
- return `${hours}:${date.getUTCMinutes()}`
+	const date = new Date()
+	let hours = date.getUTCHours() + offset
+	if (hours > 23) hours = 24 - hours
+	if (hours < 0) hours = 24 + hours
+		return `${hours}:${date.getUTCMinutes()}`
 }
 
 function formatTime(time) {
