@@ -1,4 +1,4 @@
-require('dotenv').config() 
+require('dotenv').config()
 const axios = require('axios');
 const cheerio = require('cheerio');
 const MongoClient = require('mongodb').MongoClient;
@@ -73,9 +73,9 @@ const Parser = {
 	    const address = $('span[itemprop="address"]').text().trim()
 	    const telephone = $('.theaterInfo_phone').text()
 
-	    const coords = [ $('meta[itemprop="longitude"]').attr('content'), 
+	    const coords = [ $('meta[itemprop="longitude"]').attr('content'),
 	    				 $('meta[itemprop="latitude"]').attr('content') ]
-	    const location = { type: 'Point', 
+	    const location = { type: 'Point',
 	    				   coordinates: coords.map(coord => +coord ) }
 
 	    let schedule = {}, movie_links = []
@@ -85,8 +85,8 @@ const Parser = {
 	        	.find('.films_name')
 	        	.text()
 	        	.replace(/\./g, '[dot]')
-	        
-	        const movie_link = 'https://' + 
+
+	        const movie_link = 'https://' +
 	        	$(item).find('.films_right')
 	        		.find('a').attr('href')
 	        		.match(/kinoafisha.+/)[0]
@@ -114,17 +114,19 @@ const Parser = {
 	    return schema
 	},
 
-	makeMovieSchema(data) {		
+	makeMovieSchema(data) {
 	    let $ = cheerio.load(data)
 
 	    const name = $('meta[property="og:title"]').attr('content').trim().slice(0, -7)
 	    const directors = this.array_from($('.movieInfoV2_producerBadge'), $)
 	    const poster = $('.movieInfoV2_posterImage').attr('src')
+			const last_update = new Date()
 
 	    let schema = {
 	        name,
 	        directors,
-	        poster
+	        poster,
+					last_update
 	    }
 
 
@@ -151,8 +153,8 @@ const Kinoafisha = {
 	request_options: {
 		headers: {
 			'Accept': 'text/plain',
-			'User-Agent': 'Mozilla/5.0 (Macintosh; ' + 
-				'Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 ' + 
+			'User-Agent': 'Mozilla/5.0 (Macintosh; ' +
+				'Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 ' +
 				'(KHTML, like Gecko) Version/12.1 Safari/605.1.15'
 		}
 	},
@@ -163,11 +165,11 @@ const Kinoafisha = {
 
 		for (let city of cities) {
 			const { data } = await axios.get(
-				`https://${city}.kinoafisha.info/cinema/`, 
+				`https://${city}.kinoafisha.info/cinema/`,
 				this.request_options
 			)
-			cinema_links = Parser.getLinks(data) 
-		
+			cinema_links = Parser.getLinks(data)
+
 		}
 
      	return cinema_links
@@ -181,7 +183,7 @@ const Kinoafisha = {
 		for (let cin_link of cinema_links) {
 			const { data } = await axios.get(cin_link, this.request_options)
 			let { movie_links, ...cinema } = Parser.makeCinemaSchema(data)
-			
+
 			cinema._id = +cin_link.match(/\d+/)[0]
 			cinemas.push(cinema)
 
@@ -242,7 +244,7 @@ const Extra = {
 		  batch_number++
 		} while (items.length)
 
-		Errors.add('Кинопоиск отдал не все файлы', 
+		Errors.add('Кинопоиск отдал не все файлы',
 			`${documents_total} - найдено. ${kinopoisk_movies.length} - получено.`)
 
 
@@ -271,13 +273,13 @@ const Extra = {
 
 	async getMoviesFromKinohod() {
 		const kh_url = 'https://kinohod.ru/api/rest/site/v1/movies/?sort=showcount'
-	  
+
 	  	let { data: kinohod_movies } = await axios.get(kh_url, this.request_options)
 
 	  	kinohod_movies = kinohod_movies.map((movie) => {
 	  		try {
 		  		var poster = movie.posterLandscape.name
-		  		poster = 'https://st2.kinohod.ru/c/600x320/' + 
+		  		poster = 'https://st2.kinohod.ru/c/600x320/' +
 		  			`${poster.slice(0, 2)}/${poster.slice(2, 4)}/${poster}`
 
 		  		var trailer = movie.trailers[0].mobile_mp4.filename
@@ -288,7 +290,7 @@ const Extra = {
 		  	} catch (err) {
 		  		Errors.add('На киноходе нет трейлера', movie.title)
 		  	}
-	  		
+
 	  		let schema = {
 	  			name: movie.title.trim(),
 	  			duration: +movie.duration,
@@ -345,10 +347,10 @@ const Extra = {
 			for (let kh_mov of kh_movies) {
 				if ( kh_mov.name && name_unify === unify(kh_mov.name) ) {
 					delete kh_mov.name
-					kh_mov.rating = movie.rating ? 
+					kh_mov.rating = movie.rating ?
 						{ kp: movie.rating.kp, imdb: kh_mov.rating } :
 						{ imdb: kh_mov.rating }
-					
+
 					Object.assign(movie, kh_mov)
 					kh_matched = true
 					break
@@ -357,7 +359,7 @@ const Extra = {
 
 
 			if (!kp_matched) Errors.add('На кинопоиске нет фильма', movie.name)
-			if (!kh_matched) Errors.add('На киноходе нет фильма', movie.name)	
+			if (!kh_matched) Errors.add('На киноходе нет фильма', movie.name)
 		})
 
 		for (let kp_mov of kp_movies) {
@@ -394,7 +396,33 @@ const DB = {
 		await db.collection('movies').createIndex({ name: 'text' })
 		await db.collection('cinemas').createIndex({ name: 'text' })
 		await db.collection('cinemas').createIndex( { location: "2dsphere" } )
-		
+
+		await client.close()
+	},
+
+	async updateWithUpsert(movies, cinemas, url) {
+		const client = await MongoClient.connect(url, { useNewUrlParser: true })
+		const db = await client.db('bot-node')
+
+		for (let movie of movies) {
+			const { _id, ...schema } = movie
+			await db.collection('movies').updateOne(
+				{ _id },
+				{ $set: schema },
+				{ upsert: true }
+			)
+		}
+		for (let cinema of cinemas) {
+			const { _id, ...schema } = cinema
+			await db.collection('cinemas').updateOne(
+				{ _id },
+				{ $set: schema },
+				{ upsert: true }
+			)
+		}
+
+		delete Errors['add']
+		await db.collection('errors').insertOne(Errors)
 		await client.close()
 	}
 }
@@ -409,7 +437,7 @@ const DB = {
 
 	await Extra.completeMoviesData(movies)
 	console.log('Подгрузили информацию с кинохода и кинопоиска')
-	await DB.cleanPush(movies, cinemas, process.env.FILL_DB_URL)
+	await DB.updateWithUpsert(movies, cinemas, process.env.FILL_DB_URL)
 	console.log('База данных обновлена!')
 
 })().catch(err => console.log(err))
