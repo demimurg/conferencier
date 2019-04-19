@@ -9,10 +9,10 @@ const Cook = {
 		let msg = ''
 		msg += `*"${name}"*`
 		if (age) msg += `, _${age}_`
-		if (directors) msg += `\n_Режиссер_: ${directors[0]}\n`
+		if (directors) msg += `\n_Режиссер_: ${directors[0]}`
 
-		if (rating) {
-			msg += '_Рейтинг_:'
+		if (rating && (rating.imdb || rating.kp)) {
+			msg += '\n_Рейтинг_:'
 			if (rating.imdb) msg += ` imdb - *${rating.imdb}* `
 			if (rating.kp) msg += ` kp - *${rating.kp}*`
 		}
@@ -43,17 +43,17 @@ const Cook = {
 			keyboards = []
 			let inline_keyboard = []
 
-			cinemas.forEach((cinema) => {			
-				inline_keyboard.push([ 
-					{ 
+			cinemas.forEach((cinema) => {
+				inline_keyboard.push([
+					{
 						text: `${cinema.name} ~ ${cinema.distance} км`,
 						callback_data: `(cinema)[${cinema._id}]`
-					} 
+					}
 				])
 
 				let sessions_block = []
 				cinema.schedule.forEach((seance) => {
-					sessions_block.push({ 
+					sessions_block.push({
 						text: `${seance.time}${seance.price ? ' ' + seance.price : ''}`,
 						callback_data: '(null)'
 				})
@@ -93,7 +93,7 @@ const Cook = {
 			for (let [i, { keyboard }] of Object.entries(keyboards)) {
 				let nav_bar = []
 				for (let page in keyboards) {
-					nav_bar.push({ 
+					nav_bar.push({
 						text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
 						callback_data: `(inline)[${keyboards[page]._id}]`
 					})
@@ -117,7 +117,7 @@ const Cook = {
 
 	cinemaMsg(cinema) {
 		const location = [
-			cinema.location.coordinates[1], 
+			cinema.location.coordinates[1],
 			cinema.location.coordinates[0]
 		]
 
@@ -168,17 +168,18 @@ const Cook = {
 				inline_keyboard = []
 			}
 		}
-		
-		keyboards.push({
-			_id: ObjectID(),
-			keyboard: inline_keyboard
-		})
 
+		if (inline_keyboard.length) {
+			keyboards.push({
+				_id: ObjectID(),
+				keyboard: inline_keyboard
+			})
+		}
 
 		for (let [i, { keyboard }] of Object.entries(keyboards)) {
 			let nav_bar = []
 			for (let page in keyboards) {
-				nav_bar.push({ 
+				nav_bar.push({
 					text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
 					callback_data: `(inline)[${keyboards[page]._id}]`
 				})
@@ -188,14 +189,14 @@ const Cook = {
 
 		const { keyboard: entry_keyboard } = keyboards[0]
 
-		const cinema_schedule = [ 
-			'*Сегодня в кинотеатре:*',  
-			{	
+		const cinema_schedule = [
+			'*Сегодня в кинотеатре:*',
+			{
 				parse_mode: 'markdown',
-				reply_markup: JSON.stringify({ 
+				reply_markup: JSON.stringify({
 					inline_keyboard: entry_keyboard
-				}) 
-			} 
+				})
+			}
 		]
 
 		return [cinema_info, cinema_schedule, keyboards]
@@ -216,7 +217,7 @@ const Cook = {
 
 			// 	text += `  (${metro})`
 			// }
-			
+
 			inline_keyboard.push([{ text, callback_data }])
 
 			if (inline_keyboard.length % 8 === 0 || i + 1 === cinemas.length) {
@@ -229,7 +230,7 @@ const Cook = {
 		}
 
 		const { _id: header_id, keyboard: entry_keyboard } = keyboards[0]
-		
+
 		header = [{
 			text: '● Поблизости',
 			callback_data: `(inline)[${header_id}]`
@@ -238,7 +239,7 @@ const Cook = {
 		for (let [i, { keyboard }] of Object.entries(keyboards)) {
 			let nav_bar = []
 			for (let page in keyboards) {
-				nav_bar.push({ 
+				nav_bar.push({
 					text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
 					callback_data: `(inline)[${keyboards[page]._id}]`
 				})
@@ -247,12 +248,12 @@ const Cook = {
 		}
 
 		const msg = [
-			'К твоим услугам:', 
-			{ 
-				reply_markup: 
-					JSON.stringify({ 
-						inline_keyboard: entry_keyboard 
-					}) 
+			'К твоим услугам:',
+			{
+				reply_markup:
+					JSON.stringify({
+						inline_keyboard: entry_keyboard
+					})
 			}
 		]
 
@@ -271,7 +272,7 @@ const Cook = {
 					if (movie.rating.kp) info_block += `kp - ${movie.rating.kp} `
 					if (movie.rating.imdb) info_block += `imdb - ${movie.rating.imdb}`
 				}
-				
+
 
 				inline_keyboard.push([
 					{
@@ -323,7 +324,7 @@ const Cook = {
 			for (let [i, { keyboard }] of Object.entries(keyboards)) {
 				let nav_bar = []
 				for (let page in keyboards) {
-					nav_bar.push({ 
+					nav_bar.push({
 						text: (page === i) ? `·${+page + 1}·` : `${+page + 1}`,
 						callback_data: `(inline)[${keyboards[page]._id}]`
 					})
@@ -351,7 +352,7 @@ const Cook = {
 
 		const { keyboard: entry_keyboard } = keyboards[0]
 		let program = [
-			'С пылу с жару', 
+			'С пылу с жару',
 			{ reply_markup: JSON.stringify({ inline_keyboard: entry_keyboard }) }
 		]
 
