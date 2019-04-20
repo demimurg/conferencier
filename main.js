@@ -3,7 +3,7 @@ const Telegraf = require('telegraf')
 const MongoDbInterface = require('./database/mongoDb')
 const Cook = require('./formatting/msgView')
 
-const {TOKEN, USER_DB_URL, URL, PORT, WEBHOOK} = process.env
+const { TOKEN, USER_DB_URL, URL, PORT, WEBHOOK } = process.env
 
 const bot = new Telegraf(TOKEN)
 const db = new MongoDbInterface(USER_DB_URL)
@@ -24,9 +24,9 @@ bot.command('start', async (ctx) => {
 		],
 		resize_keyboard: true
 	})
-	ctx.reply('Привет новичок! '+ 
-		'Бот *в процессе разработки*, ' + 
-		'поэтому никто здесь с тобой сюсюкаться не будет. ' + 
+	ctx.reply('Привет новичок! ' +
+		'Бот *в процессе разработки*, ' +
+		'поэтому никто здесь с тобой сюсюкаться не будет. ' +
 		'Разбирайся с этим дерьмом сам🤨', { parse_mode, reply_markup })
 })
 
@@ -50,7 +50,7 @@ bot.on('text', async (ctx) => {
 
 			ctx.reply(...movies_program)
 			break
-		
+
 		default:
 			if (input[0] === '/') input = +input.slice(1)
 
@@ -58,25 +58,25 @@ bot.on('text', async (ctx) => {
 			if (movie_schema) {
 				const preview = Cook.previewMsg(movie_schema)
 				ctx.replyWithPhoto(...preview)
-				return 
+				return
 			}
 
 			const cinema_schema = await db.getCinemaData(input)
 			if (cinema_schema) {
 				const [ cinema_info, cinema_schedule, keyboards ] = Cook.cinemaMsg(cinema_schema)
 				await ctx.telegram.sendVenue(id, ...cinema_info)
-				await ctx.reply(...cinema_schedule)
+				ctx.reply(...cinema_schedule)
 
 				await db.saveInline(keyboards)
 				return
 			}
 
-			await ctx.reply('Фильм/кинотеатр не найден, сорьки')
+			ctx.reply('Фильм/кинотеатр не найден, сорьки')
 	}
 })
 
 bot.on('callback_query', async (ctx) => {
-	const id = ctx.callbackQuery.from.id	
+	const id = ctx.callbackQuery.from.id
 	let type, doc_name
 
 	type = ctx.callbackQuery.data
@@ -89,9 +89,9 @@ bot.on('callback_query', async (ctx) => {
 			.match(/\[.+]/)[0]
 			.slice(1, -1)
 	}
-		
+
 	switch (type) {
-		
+
 		case 'schedule':
 			const cinemas = await db.getSchedule(id, +doc_name)
 			const [schedule, keyboards] = Cook.scheduleMsg(cinemas)
@@ -99,27 +99,27 @@ bot.on('callback_query', async (ctx) => {
 
 			ctx.reply(...schedule)
 			break
-		
+
 		case 'trailer':
 			const { trailer } = await db.getMovieData(doc_name)
 			if (!trailer) {
-				await ctx.reply('Увы и ах. Для этого фильма не нашлось трейлера')
+				ctx.reply('Увы и ах. Для этого фильма не нашлось трейлера')
 			} else {
-				trailer[0] === 'video' ? 
+				trailer[0] === 'video' ?
 					ctx.replyWithVideo(trailer[1], { supports_streaming: true }) :
 					ctx.reply(`[есть только на ютупчике](${trailer[1]})`, { parse_mode: 'markdown' })
 			}
 			break
-		
+
 		case 'cinema':
 			const cinema_object = await db.getCinemaData(+doc_name)
 			const [ cinema_info, cinema_schedule, cinema_keyboards ] = Cook.cinemaMsg(cinema_object)
 			await db.saveInline(cinema_keyboards)
 
 			await ctx.telegram.sendVenue(id, ...cinema_info)
-			await ctx.reply(...cinema_schedule)
+			ctx.reply(...cinema_schedule)
 			break
-		
+
 		case 'movie':
 			const movie_schema = await db.getMovieData(doc_name)
 			const preview = Cook.previewMsg(movie_schema)
@@ -130,7 +130,7 @@ bot.on('callback_query', async (ctx) => {
 		case 'inline':
 			const keyboard = await db.getInline(doc_name)
 			const reply_markup = { inline_keyboard: keyboard }
-			
+
 			try {
 				await ctx.editMessageReplyMarkup(reply_markup)
 				await ctx.answerCbQuery(' ')
@@ -176,6 +176,7 @@ process.on('launch', async () => {
 		}
 	} else {
 		mode = { polling: {} }
+		console.log('Бот запущен в режиме тестирования')
 	}
 
 	try {
@@ -184,7 +185,7 @@ process.on('launch', async () => {
 	} catch(err) {
 		console.log(err)
 	}
-	
+
 })
 process.on('SIGTERM', async () => {
 	console.log('\nCоединение с базой данных разорвано')
