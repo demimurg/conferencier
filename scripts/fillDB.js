@@ -160,7 +160,7 @@ const Kinoafisha = {
 	},
 
 	async getCinemaLinks() {
-		let cities = ['spb']
+		let cities = ['spb', 'msk', 'kr']
 		let cinema_links = []
 
 		for (let city of cities) {
