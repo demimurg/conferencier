@@ -232,7 +232,7 @@ const Cook = {
 		const { _id: header_id, keyboard: entry_keyboard } = keyboards[0]
 
 		header = [{
-			text: '● Поблизости',
+			text: '·Поблизости·',
 			callback_data: `(inline)[${header_id}]`
 		}]
 
@@ -337,12 +337,12 @@ const Cook = {
 		const rating_keyboards = make_keyboards(high_rank)
 
 		const popular_header = make_header(
-			'● Популярность', popular_keyboards[0]._id,
+			'·Популярность·', popular_keyboards[0]._id,
 			'Рейтинг', rating_keyboards[0]._id,
 		)
 		const rating_header = make_header(
 			'Популярность', popular_keyboards[0]._id,
-			'● Рейтинг', rating_keyboards[0]._id,
+			'·Рейтинг·', rating_keyboards[0]._id,
 		)
 
 		add_header_and_pages(popular_keyboards, popular_header)
