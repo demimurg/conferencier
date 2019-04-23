@@ -102,22 +102,40 @@ class MongoDbInterface {
 		return movie_schema
 	}
 
-	async getCinemaData(input) {
+	async getCinemaData(input, user_id) {
 	 	const cinemas = this.db.collection('cinemas')
-	 	const time = timeToGMT(3)
 
 	 	let schema
-	 	if (typeof(input) === 'number') {
-	 		schema = await cinemas.findOne({ _id: input })
+	 	if (user_id) {
+			const { location: user_location } = await this.userData(user_id)
+
+			const cinemas_near = await cinemas
+				.find({
+					location: {
+						$nearSphere: {
+							$geometry: user_location,
+							$maxDistance: 25000
+						}
+					}
+				}).toArray()
+
+			const input_chars = input.toLowerCase().split(' ')
+			for (let cinema of cinemas_near) {
+				let cinema_name = cinema.name.toLowerCase()
+				if ( input_chars.every( char => cinema_name.includes(char) ) ) {
+					schema = cinema
+					break
+				}
+			}
+
 	 	} else {
-	 		input = '"' + input.split(' ').join('" "') + '"'
-	 		schema = await cinemas.findOne({
-				$text: { $search: input }
-			})
+			schema = await cinemas.findOne({ _id: input })
 	 	}
 
 	 	if (schema) {
+			const time = timeToGMT(3)
 	 		let movies = Object.keys(schema.schedule)
+
 	 		movies.forEach((movie_name) => {
 	 			let correct_name = movie_name.replace(/\[dot]/g, '.')
 	 			if (movie_name !== correct_name) {
