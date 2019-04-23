@@ -187,6 +187,23 @@ const Cook = {
 			keyboard.unshift(nav_bar)
 		}
 
+		if (keyboards.length === 0) {
+			inline_keyboard = [
+				[{
+					text: 'Ищущий да найдет',
+					callback_data: '(null)'
+				}],
+				[{
+					text: 'Но не здесь',
+					callback_data: '(null)'
+				}],
+				[{
+					text: 'Кинотеатр не работает🙁',
+					callback_data: '(null)'
+				}]
+			]
+			keyboards.push({ keyboard: inline_keyboard })
+		}
 		const { keyboard: entry_keyboard } = keyboards[0]
 
 		const cinema_schedule = [

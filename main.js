@@ -61,13 +61,13 @@ bot.on('text', async (ctx) => {
 				return
 			}
 
-			const cinema_schema = await db.getCinemaData(input)
+			const cinema_schema = await db.getCinemaData(input, id)
 			if (cinema_schema) {
 				const [ cinema_info, cinema_schedule, keyboards ] = Cook.cinemaMsg(cinema_schema)
 				await ctx.telegram.sendVenue(id, ...cinema_info)
 				ctx.reply(...cinema_schedule)
 
-				await db.saveInline(keyboards)
+				if (keyboards.length > 1) await db.saveInline(keyboards)
 				return
 			}
 
@@ -114,7 +114,7 @@ bot.on('callback_query', async (ctx) => {
 		case 'cinema':
 			const cinema_object = await db.getCinemaData(+doc_name)
 			const [ cinema_info, cinema_schedule, cinema_keyboards ] = Cook.cinemaMsg(cinema_object)
-			await db.saveInline(cinema_keyboards)
+			if (cinema_keyboards.length > 1) await db.saveInline(cinema_keyboards)
 
 			await ctx.telegram.sendVenue(id, ...cinema_info)
 			ctx.reply(...cinema_schedule)
@@ -164,6 +164,7 @@ bot.on('location', async (ctx) => {
 
 process.on('launch', async () => {
 	await db.init()
+	console.log('База данных подключена')
 
 	let mode
 	if (WEBHOOK) {
@@ -190,6 +191,8 @@ process.on('launch', async () => {
 process.on('SIGTERM', async () => {
 	console.log('\nCоединение с базой данных разорвано')
 	await db.close()
+
 	process.exit()
 })
+process.on('SIGINT', () => process.emit('SIGTERM'))
 process.emit('launch')
