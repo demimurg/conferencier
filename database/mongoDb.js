@@ -195,10 +195,11 @@ class MongoDbInterface {
 			}
 		]).toArray()
 
-		matched_cinemas.forEach((cinema) => {
+		matched_cinemas.forEach((cinema, i) => {
 			cinema.distance = Math.round(cinema.distance / 10) / 100
 			cinema.schedule = cinema.schedule
 				.filter( (seance) => formatTime(seance.time) >= formatTime(time) )
+			if (!cinema.schedule.length) matched_cinemas.splice(i, 1)
 		})
 
 		return matched_cinemas
@@ -214,7 +215,7 @@ class MongoDbInterface {
 			for (let cinema of cinemas_near) {
 				if (name in cinema.schedule && cinema.schedule[name].length) {
 					const last_seance = formatTime(
-						cinema.schedule[name].slice(-1)[0]
+						cinema.schedule[name].slice(-1)[0].time
 					)
 
 					if (last_seance >= current_time) return true
