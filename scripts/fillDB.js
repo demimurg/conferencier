@@ -154,8 +154,8 @@ const Kinoafisha = {
 		headers: {
 			'Accept': 'text/plain',
 			'User-Agent': 'Mozilla/5.0 (Macintosh; ' +
-				'Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 ' +
-				'(KHTML, like Gecko) Version/12.1 Safari/605.1.15'
+			'Intel Mac OS X 10_14_4) AppleWebKit/605.1.15 ' +
+			'(KHTML, like Gecko) Version/12.1 Safari/605.1.15'
 		}
 	},
 
@@ -168,12 +168,10 @@ const Kinoafisha = {
 				`https://${city}.kinoafisha.info/cinema/`,
 				this.request_options
 			)
-			cinema_links = Parser.getLinks(data)
-
+			cinema_links.push(...Parser.getLinks(data))
 		}
 
-     	return cinema_links
-     		// .slice(0, 10)
+    return cinema_links
 	},
 
 	async getCinemasData() {
